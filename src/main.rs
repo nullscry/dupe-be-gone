@@ -5,6 +5,7 @@ use std::{
     env,
     error::Error,
     fs, io,
+    os::unix::prelude::OsStrExt,
     path::{Path, PathBuf},
     time,
 };
@@ -25,26 +26,17 @@ fn visit_dirs(dir: &Path, all_files: &mut Vec<PathBuf>) -> io::Result<()> {
     Ok(())
 }
 
-// fn hash_files(all_files: Vec<PathBuf>) -> Result<HashMap<PathBuf, Vec<u8>>, Box<dyn Error>> {
-//     let mut file_hashes = HashMap::new();
-
-//     for filepath in all_files {
-//         let mut hasher = Sha256::new();
-//         // let filepath = path.unwrap().path();
-//         // println!("Name: {}", filepath.display());
-//         let mut file = fs::File::open(filepath.as_path())?;
-//         let _bytes_written = io::copy(&mut file, &mut hasher)?;
-//         let hash_bytes = hasher.finalize().as_slice().to_vec();
-//         file_hashes.insert(filepath, hash_bytes);
-//     }
-
-//     Ok(file_hashes)
-// }
-
 fn get_file_hash(filepath: PathBuf) -> (PathBuf, Vec<u8>) {
     let mut hasher = Sha256::new();
     let mut file = fs::File::open(filepath.as_path()).unwrap();
+    let mut parent = filepath
+        .parent()
+        .unwrap_or(Path::new("/"))
+        .as_os_str()
+        .as_bytes();
+
     let _bytes_written = io::copy(&mut file, &mut hasher).unwrap();
+    let _bytes_written = io::copy(&mut parent, &mut hasher).unwrap();
     let hash_bytes = hasher.finalize().as_slice().to_vec();
     (filepath, hash_bytes)
 }
@@ -61,11 +53,15 @@ fn hash_files_func(all_files: Vec<PathBuf>) -> HashMap<Vec<u8>, Vec<PathBuf>> {
             .map(get_file_hash)
             .collect::<HashMap<PathBuf, Vec<u8>>>();
 
-        let mut hash_groups = HashMap::<Vec<u8>, Vec<PathBuf>>::new();
+        let mut hash_groups = HashMap::new();
+
         for (val, key) in file_hashes {
             hash_groups.entry(key).or_insert(Vec::new()).push(val);
         }
         hash_groups
+            .into_par_iter()
+            .filter(|(_key, val)| val.len() > 1)
+            .collect()
     });
 
     hash_groups
@@ -99,8 +95,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     visit_dirs(target_dir, &mut all_files)?;
     let file_hashes = hash_files_func(all_files);
 
-    for (hash_key, files) in file_hashes {
-        println!("{:?}: {:?}", hash_key, files);
+    for files in file_hashes.values() {
+        for file in files {
+            println!("{:?}", file);
+        }
+        println!();
     }
 
     let elapsed_time = now.elapsed();
