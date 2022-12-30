@@ -1,14 +1,35 @@
+use clap::Parser;
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
-    env,
     error::Error,
     fs, io,
     os::unix::prelude::OsStrExt,
     path::{Path, PathBuf},
     time,
 };
+
+/// Simple program find and remove duplicate files
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Name of the directory to start dupelicate search
+    #[arg(value_name = "FILE_DIR")]
+    directory: Option<PathBuf>,
+
+    /// Whether to consider compare files from different directories
+    #[arg(short, long, action)]
+    single_dir: bool,
+
+    /// Whether to print outputs of details.
+    #[arg(short, long, action)]
+    verbose: bool,
+
+    /// Whether to prompt the user when removing duplicates
+    #[arg(short, long, action)]
+    interactive: bool,
+}
 
 // one possible implementation of walking a directory only visiting files
 fn visit_dirs(dir: &Path, all_files: &mut Vec<PathBuf>) -> io::Result<()> {
@@ -41,16 +62,31 @@ fn get_file_hash(filepath: PathBuf) -> (PathBuf, Vec<u8>) {
     (filepath, hash_bytes)
 }
 
-fn hash_files_func(all_files: Vec<PathBuf>) -> HashMap<Vec<u8>, Vec<PathBuf>> {
+fn get_file_hash_single_dir(filepath: PathBuf) -> (PathBuf, Vec<u8>) {
+    let mut hasher = Sha256::new();
+    let mut file = fs::File::open(filepath.as_path()).unwrap();
+
+    let _bytes_written = io::copy(&mut file, &mut hasher).unwrap();
+    let hash_bytes = hasher.finalize().as_slice().to_vec();
+    (filepath, hash_bytes)
+}
+
+fn hash_files_func(all_files: Vec<PathBuf>, single_dir: bool) -> HashMap<Vec<u8>, Vec<PathBuf>> {
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(256)
         .build()
         .unwrap();
 
+    let h_func = if single_dir {
+        get_file_hash_single_dir
+    } else {
+        get_file_hash
+    };
+
     let hash_groups = pool.install(|| {
         let file_hashes = all_files
             .into_par_iter()
-            .map(get_file_hash)
+            .map(h_func)
             .collect::<HashMap<PathBuf, Vec<u8>>>();
 
         let mut hash_groups = HashMap::new();
@@ -68,17 +104,22 @@ fn hash_files_func(all_files: Vec<PathBuf>) -> HashMap<Vec<u8>, Vec<PathBuf>> {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let args = Args::parse();
     let now = time::Instant::now();
 
-    let args: Vec<String> = env::args().collect();
+    // let args: Vec<String> = env::args().collect();
 
-    if args.len() != 2 {
-        println!("Usage:");
-        println!("dupe-be-gone: <directory>");
-        return Ok(());
-    }
+    // if args.len() != 2 {
+    //     println!("Usage:");
+    //     println!("dupe-be-gone: <directory>");
+    //     return Ok(());
+    // }
 
-    let target_dir = Path::new(args[1].as_str());
+    let target_dir = args
+        .directory
+        .expect("Please provide a proper path for directory.");
+
+    let target_dir = &target_dir.as_path();
 
     if !Path::new(target_dir).exists() {
         println!(
@@ -93,7 +134,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut all_files = Vec::new();
     visit_dirs(target_dir, &mut all_files)?;
-    let file_hashes = hash_files_func(all_files);
+    let file_hashes = hash_files_func(all_files, args.single_dir);
 
     for files in file_hashes.values() {
         for file in files {
@@ -110,4 +151,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 // TODO
 // - Traverse recursively [x]
-// - Compare hashes[ ]
+// - Compare hashes[x]
+// - Compare parent[x]
+// - Add getops/argparse [ ]
