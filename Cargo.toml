@@ -9,3 +9,7 @@ edition = "2021"
 clap = { version = "4.0.32", features = ["derive"] }
 rayon = "1.6.1"
 sha2 = "0.10.6"
+
+[[bin]]
+name = "dupe-be-gone"
+path = "src/main.rs"
