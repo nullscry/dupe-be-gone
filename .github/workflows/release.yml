@@ -157,7 +157,7 @@ jobs:
         with:
           use-cross: ${{ matrix.config.cross }}
           command: rustc
-          args: --manifest-path --release --target ${{ matrix.config.target }} --bin dupe-be-gone --no-default-features -- -C target-cpu=${{ matrix.config.target_cpu }} -C lto
+          args: --release --target ${{ matrix.config.target }} --bin dupe-be-gone --no-default-features -- -C target-cpu=${{ matrix.config.target_cpu }} -C lto
 
       # - name: Build jcli
       #   uses: actions-rs/cargo@v1
