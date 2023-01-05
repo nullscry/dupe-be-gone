@@ -1,190 +1,214 @@
-on:
-  push:
-    tags:
-      - "v[0-9]+.*" # Push events to matching v*, i.e. v1.0, v20.15.10
 
 name: Release
+on:
+  # schedule:
+  # - cron: '0 0 * * *' # midnight UTC
+
+  push:
+    tags:
+    - 'v[0-9]+.[0-9]+.[0-9]+'
+    ## - release
+
+env:
+  BIN_NAME: dupe-be-gone
+  PROJECT_NAME: dupe-be-gone
+  REPO_NAME: nullscry/dupe-be-gone
 
 jobs:
-  initial_release:
-    name: Create base release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: false
-          prerelease: false
-
-  release_assets:
-    name: Release assets
-    runs-on: ${{ matrix.config.os }}
+  dist:
+    name: Dist
+    runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
+      fail-fast: false # don't fail other jobs if one fails
       matrix:
-        config:
-          # Linux
-          - {
-              os: ubuntu-latest,
-              toolchain: stable,
-              target: x86_64-unknown-linux-gnu,
-              target_cpu: generic,
-              cross: false,
-            }
-          - {
-              os: ubuntu-latest,
-              toolchain: stable,
-              target: x86_64-unknown-linux-gnu,
-              target_cpu: broadwell,
-              cross: false,
-            }
-          - {
-              os: ubuntu-latest,
-              toolchain: stable,
-              target: aarch64-unknown-linux-gnu,
-              target_cpu: generic,
-              cross: true,
-            }
-          - {
-              os: ubuntu-latest,
-              toolchain: stable,
-              target: arm-unknown-linux-gnueabi,
-              target_cpu: generic,
-              cross: true,
-            }
-          - {
-              os: ubuntu-latest,
-              toolchain: stable,
-              target: armv7-unknown-linux-gnueabihf,
-              target_cpu: generic,
-              cross: true,
-            }
-          # mips and powerpc are not compitble with ring v0.16.10, so they are disabled for now
-          #          - {os: ubuntu-latest, target: mips64el-unknown-linux-gnuabi64, cross: true}
-          #          - {os: ubuntu-latest, target: powerpc64le-unknown-linux-gnu, cross: true}
-          - {
-              os: ubuntu-latest,
-              toolchain: stable,
-              target: x86_64-unknown-linux-musl,
-              target_cpu: generic,
-              cross: true,
-            }
-          - {
-              os: ubuntu-latest,
-              toolchain: stable,
-              target: x86_64-unknown-linux-musl,
-              target_cpu: broadwell,
-              cross: true,
-            }
-          - {
-              os: ubuntu-latest,
-              toolchain: stable,
-              target: aarch64-linux-android,
-              target_cpu: generic,
-              cross: true,
-            }
-          # Macos
-          - {
-              os: macos-latest,
-              toolchain: stable,
-              target: x86_64-apple-darwin,
-              target_cpu: generic,
-              cross: false,
-            }
-          - {
-              os: macos-latest,
-              toolchain: stable,
-              target: x86_64-apple-darwin,
-              target_cpu: broadwell,
-              cross: false,
-            }
-          # Windows
-          - {
-              os: windows-latest,
-              toolchain: stable-x86_64-pc-windows-gnu,
-              target: x86_64-pc-windows-gnu,
-              target_cpu: generic,
-              cross: false,
-            }
-          - {
-              os: windows-latest,
-              toolchain: stable-x86_64-pc-windows-msvc,
-              target: x86_64-pc-windows-msvc,
-              target_cpu: generic,
-              cross: false,
-            }
-          - {
-              os: windows-latest,
-              toolchain: stable-x86_64-pc-windows-gnu,
-              target: x86_64-pc-windows-gnu,
-              target_cpu: broadwell,
-              cross: false,
-            }
-          - {
-              os: windows-latest,
-              toolchain: stable-x86_64-pc-windows-msvc,
-              target: x86_64-pc-windows-msvc,
-              target_cpu: broadwell,
-              cross: false,
-            }
+        build: [x86_64-linux, aarch64-linux, x86_64-macos, x86_64-windows] #, x86_64-win-gnu, win32-msvc
+        include:
+        - build: x86_64-linux
+          os: ubuntu-20.04
+          rust: stable
+          target: x86_64-unknown-linux-gnu
+          cross: false
+        - build: aarch64-linux
+          os: ubuntu-20.04
+          rust: stable
+          target: aarch64-unknown-linux-gnu
+          cross: true
+        - build: x86_64-macos
+          os: macos-latest
+          rust: stable
+          target: x86_64-apple-darwin
+          cross: false
+        - build: x86_64-windows
+          os: windows-2019
+          rust: stable
+          target: x86_64-pc-windows-msvc
+          cross: false
+        # - build: aarch64-macos
+        #   os: macos-latest
+        #   rust: stable
+        #   target: aarch64-apple-darwin
+        # - build: x86_64-win-gnu
+        #   os: windows-2019
+        #   rust: stable-x86_64-gnu
+        #   target: x86_64-pc-windows-gnu
+        # - build: win32-msvc
+        #   os: windows-2019
+        #   rust: stable
+        #   target: i686-pc-windows-msvc
+
     steps:
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ matrix.config.toolchain }}
-          target: ${{ matrix.config.target }}
-          override: true
-          default: true
-
-      - name: Downgrade cross
-        uses: actions-rs/cargo@v1
-        if: ${{ matrix.config.cross }}
-        with:
-          command: install
-          args: --version 0.1.16 cross
-
-      - name: Checkout code
-        uses: actions/checkout@v1
+      - name: Checkout sources
+        uses: actions/checkout@v2
         with:
           submodules: true
 
-      - name: Build dupe-be-gone
+      - name: Install ${{ matrix.rust }} toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          target: ${{ matrix.target }}
+          override: true
+
+      - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
-          use-cross: ${{ matrix.config.cross }}
-          command: rustc
-          args: --release --target ${{ matrix.config.target }} --bin dupe-be-gone --no-default-features -- -C target-cpu=${{ matrix.config.target_cpu }} -C lto
+          use-cross: ${{ matrix.cross }}
+          command: test
+          args: --release --locked --target ${{ matrix.target }}
 
-      # - name: Build jcli
-      #   uses: actions-rs/cargo@v1
-      #   with:
-      #     use-cross: ${{ matrix.config.cross }}
-      #     command: rustc
-      #     args: --manifest-path jcli/Cargo.toml --release --target ${{ matrix.config.target }} --bin jcli -- -C target-cpu=${{ matrix.config.target_cpu }} -C lto
+      - name: Build release binary
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: ${{ matrix.cross }}
+          command: build
+          args: --release --locked --target ${{ matrix.target }}
 
-      - name: Get tag version
-        id: get_version
-        run: echo ::set-output name=VERSION::``${GITHUB_REF#refs/tags/}``
+      - name: Strip release binary (linux and macos)
+        if: matrix.build == 'x86_64-linux' || matrix.build == 'x86_64-macos'
+        run: strip "target/${{ matrix.target }}/release/$BIN_NAME"
+
+      - name: Strip release binary (arm)
+        if: matrix.build == 'aarch64-linux'
+        run: |
+          docker run --rm -v \
+            "$PWD/target:/target:Z" \
+            rustembedded/cross:${{ matrix.target }} \
+            aarch64-linux-gnu-strip \
+            /target/${{ matrix.target }}/release/$BIN_NAME
+      - name: Build archive
         shell: bash
+        run: |
+          mkdir dist
+          if [ "${{ matrix.os }}" = "windows-2019" ]; then
+            cp "target/${{ matrix.target }}/release/$BIN_NAME.exe" "dist/"
+          else
+            cp "target/${{ matrix.target }}/release/$BIN_NAME" "dist/"
+          fi
+      - uses: actions/upload-artifact@v2.2.4
+        with:
+          name: bins-${{ matrix.build }}
+          path: dist
 
-      - name: Pack binaries if unix
-        if: matrix.config.os != 'windows-latest'
-        run: tar -C ./target/${{ matrix.config.target }}/release -czvf dupe-be-gone-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}-${{ matrix.config.target_cpu }}.tar.gz dupe-be-gone jcli
+  publish:
+    name: Publish
+    needs: [dist]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+        with:
+          submodules: false
 
-      - name: Pack binaries if windows
-        if: matrix.config.os == 'windows-latest'
-        run: compress-archive ./target/${{ matrix.config.target }}/release/dupe-be-gone.exe, ./target/${{ matrix.config.target }}/release/jcli.exe dupe-be-gone-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}-${{ matrix.config.target_cpu }}.zip
+      - uses: actions/download-artifact@v2
+        # with:
+        #   path: dist
+      # - run: ls -al ./dist
+      - run: ls -al bins-*
 
+      - name: Calculate tag name
+        run: |
+          name=dev
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            name=${GITHUB_REF:10}
+          fi
+          echo ::set-output name=val::$name
+          echo TAG=$name >> $GITHUB_ENV
+        id: tagname
+
+      - name: Build archive
+        shell: bash
+        run: |
+          set -ex
+          rm -rf tmp
+          mkdir tmp
+          mkdir dist
+          for dir in bins-* ; do
+              platform=${dir#"bins-"}
+              unset exe
+              if [[ $platform =~ "windows" ]]; then
+                  exe=".exe"
+              fi
+              pkgname=$PROJECT_NAME-$TAG-$platform
+              mkdir tmp/$pkgname
+              # cp LICENSE README.md tmp/$pkgname
+              mv bins-$platform/$BIN_NAME$exe tmp/$pkgname
+              chmod +x tmp/$pkgname/$BIN_NAME$exe
+              if [ "$exe" = "" ]; then
+                  tar cJf dist/$pkgname.tar.xz -C tmp $pkgname
+              else
+                  (cd tmp && 7z a -r ../dist/$pkgname.zip $pkgname)
+              fi
+          done
       - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@v1-release
+        uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: dupe-be-gone-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}-${{ matrix.config.target_cpu }}.*
-          asset_name: dupe-be-gone-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}-${{ matrix.config.target_cpu }}
-          tag: ${{ github.ref }}
+          file: dist/*
           file_glob: true
+          tag: ${{ steps.tagname.outputs.val }}
           overwrite: true
+
+      # - name: Extract version
+      #   id: extract-version
+      #   run: |
+      #     printf "::set-output name=%s::%s\n" tag-name "${GITHUB_REF#refs/tags/}"
+      # - uses: mislav/bump-homebrew-formula-action@v1
+      #   with:
+      #     formula-path: ${{env.PROJECT_NAME}}.rb
+      #     homebrew-tap: ${{ env.BREW_TAP }}
+      #     download-url: "https://github.com/${{ env.REPO_NAME }}/releases/download/${{ steps.extract-version.outputs.tag-name }}/${{env.PROJECT_NAME}}-${{ steps.extract-version.outputs.tag-name }}-x86_64-macos.tar.xz"
+      #     commit-message: updating formula for ${{ env.PROJECT_NAME }}
+      #   env:
+        #  COMMITTER_TOKEN: ${{ secrets.COMMITTER_TOKEN }}
+        #
+        # you can use this initial file in your homebrew-tap if you don't have an initial formula:
+        # <projectname>.rb
+        #
+        # class <Projectname capitalized> < Formula
+        #   desc "A test formula"
+        #   homepage "http://www.example.com"
+        #   url "-----"
+        #   version "-----"
+        #   sha256 "-----"
+
+        #   def install
+        #     bin.install "<bin-name>"
+        #   end
+        # end
+
+      
+      # Uncomment this section if you want to release your package to crates.io
+      # Before publishing, make sure you have filled out the following fields:
+      # license or license-file, description, homepage, documentation, repository, readme.
+      # Read more: https://doc.rust-lang.org/cargo/reference/publishing.html
+
+      # - name: Install ${{ matrix.rust }} toolchain
+      #   uses: actions-rs/toolchain@v1
+      #   with:
+      #     profile: minimal
+      #     toolchain: ${{ matrix.rust }}
+      #     target: ${{ matrix.target }}
+      # - run: cargo publish --token ${CRATES_TOKEN}
+      #  env:
+      #    CRATES_TOKEN: ${{ secrets.CRATES_TOKEN }}
