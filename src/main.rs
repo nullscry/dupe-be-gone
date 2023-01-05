@@ -23,6 +23,10 @@ struct Args {
     /// Whether to print outputs of details.
     #[arg(short, long, action)]
     silent: bool,
+
+    /// Number of threads to use. Higher values will speed up the process. But higher values might also hog resources.
+    #[arg(short, long, default_value_t = 128)]
+    threads: usize,
 }
 
 // one possible implementation of walking a directory only visiting files
@@ -66,9 +70,13 @@ fn get_file_hash_combined(filepath: PathBuf) -> (PathBuf, Vec<u8>) {
     (filepath, hash_bytes)
 }
 
-fn hash_files_func(all_files: Vec<PathBuf>, combined: bool) -> HashMap<Vec<u8>, Vec<PathBuf>> {
+fn hash_files_func(
+    all_files: Vec<PathBuf>,
+    combined: bool,
+    num_threads: usize,
+) -> HashMap<Vec<u8>, Vec<PathBuf>> {
     let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(256)
+        .num_threads(num_threads)
         .build()
         .unwrap();
 
@@ -123,7 +131,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     if !args.silent {
         println!("Finding duplicates...");
     }
-    let file_hashes = hash_files_func(all_files, args.combined);
+    let file_hashes = hash_files_func(all_files, args.combined, args.threads);
 
     if file_hashes.is_empty() {
         if !args.silent {
