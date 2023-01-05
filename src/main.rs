@@ -5,7 +5,6 @@ use std::{
     collections::HashMap,
     error::Error,
     fs, io,
-    os::unix::prelude::OsStrExt,
     path::{Path, PathBuf},
 };
 
@@ -45,8 +44,12 @@ fn visit_dirs(dir: &Path, all_files: &mut Vec<PathBuf>) -> io::Result<()> {
 fn get_file_hash(filepath: PathBuf) -> (PathBuf, Vec<u8>) {
     let mut hasher = Sha256::new();
     let mut file = fs::File::open(filepath.as_path()).unwrap();
-    let parent = filepath.parent().unwrap_or_else(|| Path::new("/"));
-    let mut parent = parent.as_os_str().as_bytes();
+    let parent = filepath
+        .parent()
+        .unwrap_or_else(|| Path::new("/"))
+        .display()
+        .to_string();
+    let mut parent = parent.as_bytes();
 
     let _bytes_written = io::copy(&mut file, &mut hasher).unwrap();
     let _bytes_written = io::copy(&mut parent, &mut hasher).unwrap();
