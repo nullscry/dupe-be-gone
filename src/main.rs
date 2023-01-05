@@ -7,28 +7,23 @@ use std::{
     fs, io,
     os::unix::prelude::OsStrExt,
     path::{Path, PathBuf},
-    time,
 };
 
-/// Simple program find and remove duplicate files
+/// A simple CLI to recursively find and remove duplicate files.
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(name = "dupe-be-gone", author = "nullscry", version = "0.1", about, long_about = None)]
 struct Args {
-    /// Name of the directory to start dupelicate search
+    /// Name of the directory to start recursive dupelicate search.
     #[arg(value_name = "FILE_DIR")]
     directory: Option<PathBuf>,
 
-    /// Whether to consider compare files from different directories
+    /// Whether to consider comparing files from different directories.
     #[arg(short, long, action)]
-    single_dir: bool,
+    combined: bool,
 
     /// Whether to print outputs of details.
     #[arg(short, long, action)]
-    verbose: bool,
-
-    /// Whether to prompt the user when removing duplicates
-    #[arg(short, long, action)]
-    interactive: bool,
+    silent: bool,
 }
 
 // one possible implementation of walking a directory only visiting files
@@ -50,11 +45,8 @@ fn visit_dirs(dir: &Path, all_files: &mut Vec<PathBuf>) -> io::Result<()> {
 fn get_file_hash(filepath: PathBuf) -> (PathBuf, Vec<u8>) {
     let mut hasher = Sha256::new();
     let mut file = fs::File::open(filepath.as_path()).unwrap();
-    let mut parent = filepath
-        .parent()
-        .unwrap_or(Path::new("/"))
-        .as_os_str()
-        .as_bytes();
+    let parent = filepath.parent().unwrap_or(Path::new("/"));
+    let mut parent = parent.as_os_str().as_bytes();
 
     let _bytes_written = io::copy(&mut file, &mut hasher).unwrap();
     let _bytes_written = io::copy(&mut parent, &mut hasher).unwrap();
@@ -62,7 +54,7 @@ fn get_file_hash(filepath: PathBuf) -> (PathBuf, Vec<u8>) {
     (filepath, hash_bytes)
 }
 
-fn get_file_hash_single_dir(filepath: PathBuf) -> (PathBuf, Vec<u8>) {
+fn get_file_hash_combined(filepath: PathBuf) -> (PathBuf, Vec<u8>) {
     let mut hasher = Sha256::new();
     let mut file = fs::File::open(filepath.as_path()).unwrap();
 
@@ -71,16 +63,17 @@ fn get_file_hash_single_dir(filepath: PathBuf) -> (PathBuf, Vec<u8>) {
     (filepath, hash_bytes)
 }
 
-fn hash_files_func(all_files: Vec<PathBuf>, single_dir: bool) -> HashMap<Vec<u8>, Vec<PathBuf>> {
+fn hash_files_func(all_files: Vec<PathBuf>, combined: bool) -> HashMap<Vec<u8>, Vec<PathBuf>> {
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(256)
         .build()
         .unwrap();
 
-    let h_func = if single_dir {
-        get_file_hash_single_dir
+    let h_func: fn(PathBuf) -> (PathBuf, Vec<u8>);
+    if combined {
+        h_func = get_file_hash_combined;
     } else {
-        get_file_hash
+        h_func = get_file_hash;
     };
 
     let hash_groups = pool.install(|| {
@@ -92,7 +85,7 @@ fn hash_files_func(all_files: Vec<PathBuf>, single_dir: bool) -> HashMap<Vec<u8>
         let mut hash_groups = HashMap::new();
 
         for (val, key) in file_hashes {
-            hash_groups.entry(key).or_insert(Vec::new()).push(val);
+            hash_groups.entry(key).or_insert_with(Vec::new).push(val);
         }
         hash_groups
             .into_par_iter()
@@ -105,15 +98,6 @@ fn hash_files_func(all_files: Vec<PathBuf>, single_dir: bool) -> HashMap<Vec<u8>
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
-    let now = time::Instant::now();
-
-    // let args: Vec<String> = env::args().collect();
-
-    // if args.len() != 2 {
-    //     println!("Usage:");
-    //     println!("dupe-be-gone: <directory>");
-    //     return Ok(());
-    // }
 
     let target_dir = args
         .directory
@@ -129,28 +113,103 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
-    // let target_dir = fs::read_dir(target_dir)?;
-    // let target_dir = target_dir.filter(|x| !x.as_ref().unwrap().path().is_dir());
-
     let mut all_files = Vec::new();
+
+    if !args.silent {
+        println!("Gathering all files...");
+    }
     visit_dirs(target_dir, &mut all_files)?;
-    let file_hashes = hash_files_func(all_files, args.single_dir);
+
+    if !args.silent {
+        println!("Finding duplicates...");
+    }
+    let file_hashes = hash_files_func(all_files, args.combined);
+
+    if file_hashes.len() == 0 {
+        if !args.silent {
+            println!("No duplicates found!");
+        }
+
+        return Ok(());
+    }
+
+    let mut marked_files = Vec::new();
+
+    let mut user_input = String::new();
+    let mut user_choice;
+    let stdin = io::stdin();
+    if !args.silent {
+        println!("Starting duplicate cleaning procedure!");
+    }
 
     for files in file_hashes.values() {
-        for file in files {
-            println!("{:?}", file);
+        println!("0: <TO KEEP ALL>");
+        for (i, file) in files.iter().enumerate() {
+            println!("{}: {:?}", i + 1, file);
         }
+
+        println!("Enter the number of the file you'd like TO KEEP: ");
+        loop {
+            user_input.clear();
+            match stdin.read_line(&mut user_input) {
+                Ok(_) => {}
+                Err(_) => {
+                    eprintln!("Please enter a valid input.");
+                    continue;
+                }
+            }
+            match user_input.trim().parse::<usize>() {
+                // If `optional` destructures, evaluate the block.
+                Ok(n) => {
+                    if n > files.len() {
+                        println!("Please enter a valid choice.");
+                    } else {
+                        user_choice = n;
+                        break;
+                    }
+                    // ^ Requires 3 indentations!
+                }
+                // Quit the loop when the destructure fails:
+                Err(e) => {
+                    eprintln!("Error encountered: {}", e);
+                    eprintln!("Please enter a valid number.");
+                } // ^ Why should this be required? There must be a better way!
+            }
+        }
+
+        if user_choice != 0 {
+            for (i, file) in files.iter().enumerate() {
+                if i + 1 != user_choice {
+                    if !args.silent == true {
+                        println!("Marking file for deletion: {:?}", file);
+                    }
+                    marked_files.push(file);
+                }
+            }
+        }
+
         println!();
     }
 
-    let elapsed_time = now.elapsed();
-    println!("Running main() took {} seconds.", elapsed_time.as_secs());
+    for file in marked_files {
+        match fs::remove_file(file) {
+            Ok(()) => {
+                if !args.silent {
+                    println!("Deleted file {:?}", file)
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "Encountered error {} when trying to delete file {:?}.",
+                    e, file
+                )
+            }
+        }
+    }
+
+    if !args.silent {
+        println!("Finished cleaning dupes!");
+    }
 
     Ok(())
 }
-
-// TODO
-// - Traverse recursively [x]
-// - Compare hashes[x]
-// - Compare parent[x]
-// - Add getops/argparse [ ]
