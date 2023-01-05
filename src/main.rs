@@ -45,7 +45,7 @@ fn visit_dirs(dir: &Path, all_files: &mut Vec<PathBuf>) -> io::Result<()> {
 fn get_file_hash(filepath: PathBuf) -> (PathBuf, Vec<u8>) {
     let mut hasher = Sha256::new();
     let mut file = fs::File::open(filepath.as_path()).unwrap();
-    let parent = filepath.parent().unwrap_or(Path::new("/"));
+    let parent = filepath.parent().unwrap_or_else(|| Path::new("/"));
     let mut parent = parent.as_os_str().as_bytes();
 
     let _bytes_written = io::copy(&mut file, &mut hasher).unwrap();
@@ -69,14 +69,13 @@ fn hash_files_func(all_files: Vec<PathBuf>, combined: bool) -> HashMap<Vec<u8>, 
         .build()
         .unwrap();
 
-    let h_func: fn(PathBuf) -> (PathBuf, Vec<u8>);
-    if combined {
-        h_func = get_file_hash_combined;
+    let h_func: fn(PathBuf) -> (PathBuf, Vec<u8>) = if combined {
+        get_file_hash_combined
     } else {
-        h_func = get_file_hash;
+        get_file_hash
     };
 
-    let hash_groups = pool.install(|| {
+    pool.install(|| {
         let file_hashes = all_files
             .into_par_iter()
             .map(h_func)
@@ -91,9 +90,7 @@ fn hash_files_func(all_files: Vec<PathBuf>, combined: bool) -> HashMap<Vec<u8>, 
             .into_par_iter()
             .filter(|(_key, val)| val.len() > 1)
             .collect()
-    });
-
-    hash_groups
+    })
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -125,7 +122,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     let file_hashes = hash_files_func(all_files, args.combined);
 
-    if file_hashes.len() == 0 {
+    if file_hashes.is_empty() {
         if !args.silent {
             println!("No duplicates found!");
         }
@@ -180,7 +177,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         if user_choice != 0 {
             for (i, file) in files.iter().enumerate() {
                 if i + 1 != user_choice {
-                    if !args.silent == true {
+                    if !args.silent {
                         println!("Marking file for deletion: {:?}", file);
                     }
                     marked_files.push(file);
