@@ -1,8 +1,20 @@
 # dupe-be-gone
 
-A simple CLI to recursively find and remove duplicate files
+[![Build Status](https://github.com/nullscry/dupe-be-gone/actions/workflows/ci.yml/badge.svg)](https://github.com/nullscry/dupe-be-gone/actions/workflows/ci.yml)
+[![Release Status](https://github.com/nullscry/dupe-be-gone/actions/workflows/release.yml/badge.svg)](https://github.com/nullscry/dupe-be-gone/releases)
+[![Crate Status](https://img.shields.io/crates/v/dupe-be-gone.svg)](https://crates.io/crates/dupe-be-gone)
+[![Docs Status](https://docs.rs/dupe-be-gone/badge.svg)](https://docs.rs/crate/dupe-be-gone/)
 
-This is a project that I like to work on to improve my Rust skills.
+A Multi-threaded duplicate file cleaner usuable as a CLI application.
+
+## Target Plaforms
+
+- aarch64-linux
+- x86_64-linux
+- x86_64-macos
+- x86_64-windows
+
+## Usage
 
 ```sh
 dupe-be-gone --help

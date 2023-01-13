@@ -2,7 +2,10 @@
 name = "dupe-be-gone"
 version = "0.0.2"
 edition = "2021"
-
+description = "A Multi-threaded duplicate file cleaner usuable as a CLI application."
+license = "GPL-3.0"
+keywords = ["cli", "duplicate-detection", "duplicate"]
+repository = "https://github.com/nullscry/dupe-be-gone"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
