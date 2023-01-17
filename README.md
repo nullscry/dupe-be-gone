@@ -14,6 +14,44 @@ A Multi-threaded duplicate file cleaner usuable as a CLI application.
 - x86_64-macos
 - x86_64-windows
 
+## Installation
+
+- Using cargo
+
+  - ```sh
+    cargo install dupe-be-gone
+    ```
+
+    will report where the binary is installed. Like in Linux:
+
+    ```sh
+    Installing /home/<youruser>/.cargo/bin/dupe-be-gone
+    ```
+
+  - Then invoke the binary with
+
+    ```sh
+    /home/<youruser>/.cargo/bin/dupe-be-gone
+    ```
+
+    OR if `/home/<youruser>/.cargo/bin/` is in your PATH
+
+    ```sh
+    dupe-be-gone
+    ```
+
+- Using precompiled binaries
+
+  - Download and install latest version for your architecture from [releases](https://github.com/nullscry/dupe-be-gone/releases)
+  - Unzip, untar and directly use the binary like:
+    ```sh
+    dupe-be-gone
+    ```
+  - You might need to give executable permissions to the binary like:
+    ```sh
+    chmod +x dupe-be-gone
+    ```
+
 ## Usage
 
 ```sh
