@@ -149,7 +149,10 @@ name = "dupe-be-gone"
 version = "0.0.2"
 dependencies = [
  "clap",
+ "digest",
+ "nohash-hasher",
  "rayon",
+ "rustc-hash",
  "sha2",
 ]
 
@@ -249,6 +252,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "nohash-hasher"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bf50223579dc7cdcfb3bfcacf7069ff68243f8c363f62ffa99cf000a6b9c451"
+
+[[package]]
 name = "num_cpus"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -333,6 +342,12 @@ dependencies = [
  "crossbeam-utils",
  "num_cpus",
 ]
+
+[[package]]
+name = "rustc-hash"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustix"

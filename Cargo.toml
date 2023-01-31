@@ -10,7 +10,10 @@ repository = "https://github.com/nullscry/dupe-be-gone"
 
 [dependencies]
 clap = { version = "4.0.32", features = ["derive"] }
+digest = "0.10.6"
+nohash-hasher = "0.2.0"
 rayon = "1.6.1"
+rustc-hash = "1.1.0"
 sha2 = "0.10.6"
 
 [[bin]]

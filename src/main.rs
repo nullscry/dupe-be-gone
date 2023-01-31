@@ -4,9 +4,17 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     error::Error,
-    fs, io,
+    fs,
+    hash::Hasher,
+    io,
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
+
+mod hasher;
+use hasher::FxHasher;
+
+use nohash_hasher::BuildNoHashHasher;
 
 /// A simple CLI to recursively find and remove duplicate files.
 #[derive(Parser, Debug)]
@@ -70,34 +78,74 @@ fn get_file_hash_combined(filepath: PathBuf) -> (PathBuf, Vec<u8>) {
     (filepath, hash_bytes)
 }
 
+fn get_file_hash_rustc(filepath: PathBuf) -> (u64, PathBuf) {
+    let mut hasher = FxHasher::default();
+    let mut file = fs::File::open(filepath.as_path()).unwrap();
+    let parent = filepath
+        .parent()
+        .unwrap_or_else(|| Path::new("/"))
+        .display()
+        .to_string();
+    let mut parent = parent.as_bytes();
+
+    let _bytes_written = io::copy(&mut file, &mut hasher).unwrap();
+    let _bytes_written = io::copy(&mut parent, &mut hasher).unwrap();
+    let hash_bytes = hasher.finish();
+    (hash_bytes, filepath)
+}
+
+fn get_file_hash_combined_rustc(filepath: PathBuf) -> (u64, PathBuf) {
+    let mut hasher = FxHasher::default();
+    let mut file = fs::File::open(filepath.as_path()).unwrap();
+
+    let _bytes_written = io::copy(&mut file, &mut hasher).unwrap();
+    let hash_bytes = hasher.finish();
+    (hash_bytes, filepath)
+}
+
 fn hash_files_func(
     all_files: Vec<PathBuf>,
     combined: bool,
     num_threads: usize,
-) -> HashMap<Vec<u8>, Vec<PathBuf>> {
+) -> HashMap<u64, Vec<PathBuf>> {
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(num_threads)
         .build()
         .unwrap();
 
-    let h_func: fn(PathBuf) -> (PathBuf, Vec<u8>) = if combined {
-        get_file_hash_combined
+    let h_func: fn(PathBuf) -> (u64, PathBuf) = if combined {
+        get_file_hash_combined_rustc
     } else {
-        get_file_hash
+        get_file_hash_rustc
     };
 
     pool.install(|| {
-        let file_hashes = all_files
-            .into_par_iter()
-            .map(h_func)
-            .collect::<HashMap<PathBuf, Vec<u8>>>();
+        let hash_groups: HashMap<u64, Vec<PathBuf>, BuildNoHashHasher<u64>> =
+            HashMap::with_hasher(BuildNoHashHasher::default());
+        let hash_groups = Arc::new(Mutex::new(Box::new(hash_groups)));
 
-        let mut hash_groups = HashMap::new();
+        all_files.into_par_iter().for_each(|file| {
+            let (file_hash, file_path) = h_func(file);
+            hash_groups
+                .lock()
+                .unwrap()
+                .entry(file_hash)
+                .or_insert_with(Vec::new)
+                .push(file_path);
+        });
+        // let file_hashes = all_files
+        //     .into_par_iter()
+        //     .map(h_func)
+        //     .collect::<HashMap<PathBuf, Vec<u8>>>();
 
-        for (val, key) in file_hashes {
-            hash_groups.entry(key).or_insert_with(Vec::new).push(val);
-        }
+        // let mut hash_groups = HashMap::new();
+
+        // for (val, key) in file_hashes {
+        //     hash_groups.entry(key).or_insert_with(Vec::new).push(val);
+        // }
+        let hash_groups = &*hash_groups.lock().unwrap();
         hash_groups
+            .to_owned()
             .into_par_iter()
             .filter(|(_key, val)| val.len() > 1)
             .collect()
