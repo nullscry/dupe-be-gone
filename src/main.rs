@@ -1,6 +1,5 @@
 use clap::Parser;
 use rayon::prelude::*;
-use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     error::Error,
@@ -53,30 +52,30 @@ fn visit_dirs(dir: &Path, all_files: &mut Vec<PathBuf>) -> io::Result<()> {
     Ok(())
 }
 
-fn get_file_hash(filepath: PathBuf) -> (PathBuf, Vec<u8>) {
-    let mut hasher = Sha256::new();
-    let mut file = fs::File::open(filepath.as_path()).unwrap();
-    let parent = filepath
-        .parent()
-        .unwrap_or_else(|| Path::new("/"))
-        .display()
-        .to_string();
-    let mut parent = parent.as_bytes();
+// fn get_file_hash(filepath: PathBuf) -> (PathBuf, Vec<u8>) {
+//     let mut hasher = Sha256::new();
+//     let mut file = fs::File::open(filepath.as_path()).unwrap();
+//     let parent = filepath
+//         .parent()
+//         .unwrap_or_else(|| Path::new("/"))
+//         .display()
+//         .to_string();
+//     let mut parent = parent.as_bytes();
 
-    let _bytes_written = io::copy(&mut file, &mut hasher).unwrap();
-    let _bytes_written = io::copy(&mut parent, &mut hasher).unwrap();
-    let hash_bytes = hasher.finalize().as_slice().to_vec();
-    (filepath, hash_bytes)
-}
+//     let _bytes_written = io::copy(&mut file, &mut hasher).unwrap();
+//     let _bytes_written = io::copy(&mut parent, &mut hasher).unwrap();
+//     let hash_bytes = hasher.finalize().as_slice().to_vec();
+//     (filepath, hash_bytes)
+// }
 
-fn get_file_hash_combined(filepath: PathBuf) -> (PathBuf, Vec<u8>) {
-    let mut hasher = Sha256::new();
-    let mut file = fs::File::open(filepath.as_path()).unwrap();
+// fn get_file_hash_combined(filepath: PathBuf) -> (PathBuf, Vec<u8>) {
+//     let mut hasher = Sha256::new();
+//     let mut file = fs::File::open(filepath.as_path()).unwrap();
 
-    let _bytes_written = io::copy(&mut file, &mut hasher).unwrap();
-    let hash_bytes = hasher.finalize().as_slice().to_vec();
-    (filepath, hash_bytes)
-}
+//     let _bytes_written = io::copy(&mut file, &mut hasher).unwrap();
+//     let hash_bytes = hasher.finalize().as_slice().to_vec();
+//     (filepath, hash_bytes)
+// }
 
 fn get_file_hash_rustc(filepath: PathBuf) -> (u64, PathBuf) {
     let mut hasher = FxHasher::default();
